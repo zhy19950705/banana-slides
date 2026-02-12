@@ -115,7 +115,9 @@ const debouncedUpdatePage = debounce(
   warningMessage: null,
 
   // Setters
-  setCurrentProject: (project) => set({ currentProject: project }),
+  setCurrentProject: (project) => {
+    set({ currentProject: project });
+  },
   setGlobalLoading: (loading) => set({ isGlobalLoading: loading }),
   setError: (error) => set({ error }),
 

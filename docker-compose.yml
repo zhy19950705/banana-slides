@@ -29,7 +29,7 @@ services:
     restart: unless-stopped
     healthcheck:
       # 健康检查使用容器内部固定端口 5000
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -62,4 +62,3 @@ networks:
 volumes:
   backend-data:
   uploads-data:
-

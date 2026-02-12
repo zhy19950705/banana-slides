@@ -9,6 +9,7 @@ import { SlidePreview } from './pages/SlidePreview';
 import { SettingsPage } from './pages/Settings';
 import { useProjectStore } from './store/useProjectStore';
 import { useToast } from './components/shared';
+import { canAccessSettings } from '@/utils/settingsAccess';
 
 function App() {
   const { currentProject, syncProject, error, setError } = useProjectStore();
@@ -36,7 +37,10 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/landing" element={<Landing />} />
         <Route path="/history" element={<History />} />
-        <Route path="/settings" element={<SettingsPage />} />
+        <Route
+          path="/settings"
+          element={canAccessSettings() ? <SettingsPage /> : <Navigate to="/" replace />}
+        />
         <Route path="/project/:projectId/outline" element={<OutlineEditor />} />
         <Route path="/project/:projectId/detail" element={<DetailEditor />} />
         <Route path="/project/:projectId/preview" element={<SlidePreview />} />
@@ -48,4 +52,3 @@ function App() {
 }
 
 export default App;
-

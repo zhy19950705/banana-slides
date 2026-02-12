@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Sparkles, FileText, Palette, MessageSquare, Download, ChevronLeft, ChevronRight, ExternalLink, Settings, Check } from 'lucide-react';
+import { Sparkles, FileText, Palette, MessageSquare, Download, ChevronLeft, ChevronRight, Settings, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Modal } from './Modal';
 import { Button } from './Button';
 import { useT } from '@/hooks/useT';
+import { canAccessSettings } from '@/utils/settingsAccess';
 
 const helpI18n = {
   zh: {
@@ -79,6 +80,7 @@ const featureIcons = [
 export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
   const t = useT(helpI18n);
   const navigate = useNavigate();
+  const hasSettingsAccess = canAccessSettings();
   const [currentPage, setCurrentPage] = useState(0);
   const [currentShowcase, setCurrentShowcase] = useState(0);
   const [expandedFeature, setExpandedFeature] = useState<number | null>(null);
@@ -106,6 +108,9 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
   };
 
   const handleGoToSettings = () => {
+    if (!hasSettingsAccess) {
+      return;
+    }
     onClose();
     navigate('/settings');
   };
@@ -176,26 +181,19 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
           <h4 className="font-semibold text-gray-800 dark:text-foreground-primary">{t('help.step4Title')}</h4>
           <p className="text-sm text-gray-600 dark:text-foreground-tertiary">{t('help.step4Desc')}</p>
         </div>
-        <a
-          href="https://github.com/Anionex/banana-slides/issues"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 text-sm text-banana-600 hover:text-banana-700 font-medium"
-        >
-          <ExternalLink size={14} />
-          {t('help.goToGithubIssue')}
-        </a>
       </div>
 
-      <div className="flex justify-center pt-2">
-        <Button
-          onClick={handleGoToSettings}
-          className="bg-banana-500 hover:bg-banana-600 text-black dark:text-white shadow-lg"
-          icon={<Settings size={18} />}
-        >
-          {t('help.goToSettings')}
-        </Button>
-      </div>
+      {hasSettingsAccess && (
+        <div className="flex justify-center pt-2">
+          <Button
+            onClick={handleGoToSettings}
+            className="bg-banana-500 hover:bg-banana-600 text-black dark:text-white shadow-lg"
+            icon={<Settings size={18} />}
+          >
+            {t('help.goToSettings')}
+          </Button>
+        </div>
+      )}
 
       <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg p-3">
         <p className="text-xs text-blue-800">
@@ -274,17 +272,6 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
         ))}
       </div>
 
-      <div className="text-center pt-4">
-        <a
-          href="https://github.com/Anionex/banana-slides/issues/2"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 text-sm text-banana-600 hover:text-banana-700 font-medium"
-        >
-          <ExternalLink size={14} />
-          {t('help.viewMoreCases')}
-        </a>
-      </div>
     </div>
   );
 
@@ -387,16 +374,6 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
               </Button>
             )}
           </div>
-
-          <a
-            href="https://github.com/Anionex/banana-slides"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-gray-500 dark:text-foreground-tertiary hover:text-gray-700 dark:hover:text-gray-200 flex items-center gap-1"
-          >
-            <ExternalLink size={14} />
-            GitHub
-          </a>
 
           <div className="flex items-center gap-2">
             {currentPage < totalPages - 1 ? (

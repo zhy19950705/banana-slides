@@ -14,7 +14,7 @@ from urllib.parse import unquote
 import threading
 
 from models import db, ReferenceFile, Project
-from utils.response import success_response, error_response, bad_request, not_found
+from utils import success_response, error_response, bad_request, not_found, get_client_id_or_error
 from services.file_parser_service import FileParserService
 
 logger = logging.getLogger(__name__)
@@ -115,6 +115,10 @@ def upload_reference_file():
         Reference file information with status
     """
     try:
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
         # Check if file is in request
         if 'file' not in request.files:
             return bad_request("No file provided")
@@ -153,7 +157,10 @@ def upload_reference_file():
             project_id = None
         else:
             # Verify project exists
-            project = Project.query.get(project_id)
+            project = Project.query.filter(
+                Project.id == project_id,
+                Project.owner_client_id == client_id
+            ).first()
             if not project:
                 return not_found('Project')
         
@@ -187,6 +194,7 @@ def upload_reference_file():
         
         # Create database record
         reference_file = ReferenceFile(
+            owner_client_id=client_id,
             project_id=project_id,
             filename=original_filename,
             file_path=str(file_path.relative_to(upload_folder)),
@@ -219,7 +227,14 @@ def get_reference_file(file_id):
         Reference file information including parse status
     """
     try:
-        reference_file = ReferenceFile.query.get(file_id)
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
+        reference_file = ReferenceFile.query.filter(
+            ReferenceFile.id == file_id,
+            ReferenceFile.owner_client_id == client_id
+        ).first()
         if not reference_file:
             return not_found('Reference file')
         
@@ -240,7 +255,14 @@ def delete_reference_file(file_id):
         Success message
     """
     try:
-        reference_file = ReferenceFile.query.get(file_id)
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
+        reference_file = ReferenceFile.query.filter(
+            ReferenceFile.id == file_id,
+            ReferenceFile.owner_client_id == client_id
+        ).first()
         if not reference_file:
             return not_found('Reference file')
         
@@ -281,19 +303,34 @@ def list_project_reference_files(project_id):
         List of reference files
     """
     try:
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
         # Special case: 'all' means list all files
         if project_id == 'all':
-            reference_files = ReferenceFile.query.all()
+            reference_files = ReferenceFile.query.filter(
+                ReferenceFile.owner_client_id == client_id
+            ).all()
         # Special case: 'global' or 'none' means list global files (not associated with any project)
         elif project_id in ['global', 'none']:
-            reference_files = ReferenceFile.query.filter_by(project_id=None).all()
+            reference_files = ReferenceFile.query.filter(
+                ReferenceFile.project_id.is_(None),
+                ReferenceFile.owner_client_id == client_id
+            ).all()
         else:
             # Verify project exists
-            project = Project.query.get(project_id)
+            project = Project.query.filter(
+                Project.id == project_id,
+                Project.owner_client_id == client_id
+            ).first()
             if not project:
                 return not_found('Project')
             
-            reference_files = ReferenceFile.query.filter_by(project_id=project_id).all()
+            reference_files = ReferenceFile.query.filter(
+                ReferenceFile.project_id == project_id,
+                ReferenceFile.owner_client_id == client_id
+            ).all()
         
         # 列表查询时不包含 markdown_content 和失败计数，加快响应速度
         return success_response({
@@ -314,7 +351,14 @@ def trigger_file_parse(file_id):
         Updated reference file information
     """
     try:
-        reference_file = ReferenceFile.query.get(file_id)
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
+        reference_file = ReferenceFile.query.filter(
+            ReferenceFile.id == file_id,
+            ReferenceFile.owner_client_id == client_id
+        ).first()
         if not reference_file:
             return not_found('Reference file')
         
@@ -375,7 +419,14 @@ def associate_file_to_project(file_id):
         Updated reference file information
     """
     try:
-        reference_file = ReferenceFile.query.get(file_id)
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
+        reference_file = ReferenceFile.query.filter(
+            ReferenceFile.id == file_id,
+            ReferenceFile.owner_client_id == client_id
+        ).first()
         if not reference_file:
             return not_found('Reference file')
         
@@ -386,12 +437,16 @@ def associate_file_to_project(file_id):
             return bad_request("project_id is required")
         
         # Verify project exists
-        project = Project.query.get(project_id)
+        project = Project.query.filter(
+            Project.id == project_id,
+            Project.owner_client_id == client_id
+        ).first()
         if not project:
             return not_found('Project')
         
         # Update file's project_id
         reference_file.project_id = project_id
+        reference_file.owner_client_id = client_id
         reference_file.updated_at = datetime.utcnow()
         db.session.commit()
         
@@ -416,7 +471,14 @@ def dissociate_file_from_project(file_id):
         Updated reference file information
     """
     try:
-        reference_file = ReferenceFile.query.get(file_id)
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
+        reference_file = ReferenceFile.query.filter(
+            ReferenceFile.id == file_id,
+            ReferenceFile.owner_client_id == client_id
+        ).first()
         if not reference_file:
             return not_found('Reference file')
         
@@ -432,4 +494,3 @@ def dissociate_file_from_project(file_id):
     except Exception as e:
         logger.error(f"Error dissociating reference file: {str(e)}", exc_info=True)
         return error_response('SERVER_ERROR', str(e), 500)
-

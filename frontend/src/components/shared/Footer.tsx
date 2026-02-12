@@ -1,8 +1,4 @@
 import React from 'react';
-import { Github } from 'lucide-react';
-
-const GITHUB_REPO = 'Anionex/banana-slides';
-const GITHUB_URL = `https://github.com/${GITHUB_REPO}`;
 
 export const Footer: React.FC = () => {
   const currentYear = new Date().getFullYear();
@@ -18,20 +14,6 @@ export const Footer: React.FC = () => {
               蕉幻 Banana Slides
             </span>
           </div>
-
-          {/* Divider - 仅在大屏显示 */}
-          <span className="hidden sm:inline text-gray-300 dark:text-border-primary">·</span>
-
-          {/* GitHub Link */}
-          <a
-            href={GITHUB_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5"
-          >
-            <Github size={16} />
-            <span>GitHub</span>
-          </a>
         </div>
       </div>
     </footer>

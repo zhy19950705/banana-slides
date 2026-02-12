@@ -30,6 +30,7 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3000,
       host: true, // 监听所有地址
+      allowedHosts: ['guandata.natapp1.cc'],
       watch: {
         usePolling: true, // WSL 环境下需要启用轮询
       },
@@ -74,3 +75,4 @@ export default defineConfig(({ mode }) => {
     },
   }
 })
+

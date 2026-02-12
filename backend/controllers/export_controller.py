@@ -10,7 +10,8 @@ from werkzeug.utils import secure_filename
 from models import db, Project, Page, Task
 from utils import (
     error_response, not_found, bad_request, success_response,
-    parse_page_ids_from_query, parse_page_ids_from_body, get_filtered_pages
+    parse_page_ids_from_query, parse_page_ids_from_body, get_filtered_pages,
+    get_client_id_or_error
 )
 from services import ExportService, FileService
 from services.ai_service_manager import get_ai_service
@@ -18,6 +19,13 @@ from services.ai_service_manager import get_ai_service
 logger = logging.getLogger(__name__)
 
 export_bp = Blueprint('export', __name__, url_prefix='/api/projects')
+
+
+def _get_owned_project(project_id: str, client_id: str):
+    return Project.query.filter(
+        Project.id == project_id,
+        Project.owner_client_id == client_id
+    ).first()
 
 
 @export_bp.route('/<project_id>/export/pptx', methods=['GET'])
@@ -40,7 +48,11 @@ def export_pptx(project_id):
         }
     """
     try:
-        project = Project.query.get(project_id)
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
+        project = _get_owned_project(project_id, client_id)
         
         if not project:
             return not_found('Project')
@@ -117,7 +129,11 @@ def export_pdf(project_id):
         }
     """
     try:
-        project = Project.query.get(project_id)
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
+        project = _get_owned_project(project_id, client_id)
         
         if not project:
             return not_found('Project')
@@ -209,7 +225,11 @@ def export_editable_pptx(project_id):
     轮询 /api/projects/{project_id}/tasks/{task_id} 获取进度和下载链接
     """
     try:
-        project = Project.query.get(project_id)
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
+        project = _get_owned_project(project_id, client_id)
         
         if not project:
             return not_found('Project')

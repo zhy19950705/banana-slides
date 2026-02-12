@@ -4,7 +4,7 @@ Template Controller - handles template-related endpoints
 import logging
 from flask import Blueprint, request, current_app
 from models import db, Project, UserTemplate
-from utils import success_response, error_response, not_found, bad_request, allowed_file
+from utils import success_response, error_response, not_found, bad_request, allowed_file, get_client_id_or_error
 from services import FileService
 from datetime import datetime
 
@@ -12,6 +12,13 @@ logger = logging.getLogger(__name__)
 
 template_bp = Blueprint('templates', __name__, url_prefix='/api/projects')
 user_template_bp = Blueprint('user_templates', __name__, url_prefix='/api/user-templates')
+
+
+def _get_owned_project(project_id: str, client_id: str):
+    return Project.query.filter(
+        Project.id == project_id,
+        Project.owner_client_id == client_id
+    ).first()
 
 
 @template_bp.route('/<project_id>/template', methods=['POST'])
@@ -23,7 +30,11 @@ def upload_template(project_id):
     Form: template_image=@file.png
     """
     try:
-        project = Project.query.get(project_id)
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
+        project = _get_owned_project(project_id, client_id)
         
         if not project:
             return not_found('Project')
@@ -66,7 +77,11 @@ def delete_template(project_id):
     DELETE /api/projects/{project_id}/template - Delete template
     """
     try:
-        project = Project.query.get(project_id)
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
+        project = _get_owned_project(project_id, client_id)
         
         if not project:
             return not_found('Project')
@@ -215,4 +230,3 @@ def delete_user_template(template_id):
     except Exception as e:
         db.session.rollback()
         return error_response('SERVER_ERROR', str(e), 500)
-

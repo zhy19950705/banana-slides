@@ -3,6 +3,30 @@ import axios from 'axios';
 // 开发环境：通过 Vite proxy 转发
 // 生产环境：通过 nginx proxy 转发
 const API_BASE_URL = '';
+const CLIENT_ID_STORAGE_KEY = 'banana_client_id';
+const CLIENT_ID_HEADER = 'X-Client-Id';
+
+function createClientId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `web-${crypto.randomUUID()}`;
+  }
+  return `web-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function getOrCreateClientId(): string {
+  if (typeof window === 'undefined') {
+    return 'server-render-client';
+  }
+
+  const existing = localStorage.getItem(CLIENT_ID_STORAGE_KEY);
+  if (existing && existing.trim().length >= 8) {
+    return existing;
+  }
+
+  const clientId = createClientId();
+  localStorage.setItem(CLIENT_ID_STORAGE_KEY, clientId);
+  return clientId;
+}
 
 // 创建 axios 实例
 export const apiClient = axios.create({
@@ -13,6 +37,12 @@ export const apiClient = axios.create({
 // 请求拦截器
 apiClient.interceptors.request.use(
   (config) => {
+    const clientId = getOrCreateClientId();
+    if (!config.headers) {
+      config.headers = {} as any;
+    }
+    config.headers[CLIENT_ID_HEADER] = clientId;
+
     // 如果请求体是 FormData，删除 Content-Type 让浏览器自动设置
     // 浏览器会自动添加正确的 Content-Type 和 boundary
     if (config.data instanceof FormData) {
@@ -76,4 +106,3 @@ export const getImageUrl = (path?: string, timestamp?: string | number): string 
 };
 
 export default apiClient;
-

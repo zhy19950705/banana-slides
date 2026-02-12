@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { X, FileText, Settings as SettingsIcon, Download, Sparkles, AlertTriangle } from 'lucide-react';
 import { Button, Textarea } from '@/components/shared';
 import { useT } from '@/hooks/useT';
 import { Settings } from '@/pages/Settings';
 import type { ExportExtractorMethod, ExportInpaintMethod } from '@/types';
+import { canAccessSettings } from '@/utils/settingsAccess';
 
 // ProjectSettings 组件自包含翻译
 const projectSettingsI18n = {
@@ -114,6 +115,13 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
 }) => {
   const t = useT(projectSettingsI18n);
   const [activeTab, setActiveTab] = useState<SettingsTab>('project');
+  const hasGlobalSettingsAccess = canAccessSettings();
+
+  useEffect(() => {
+    if (!hasGlobalSettingsAccess && activeTab === 'global') {
+      setActiveTab('project');
+    }
+  }, [activeTab, hasGlobalSettingsAccess]);
 
   const EXTRACTOR_METHOD_OPTIONS: { value: ExportExtractorMethod; labelKey: string; descKey: string }[] = [
     { value: 'hybrid', labelKey: 'projectSettings.extractorHybrid', descKey: 'projectSettings.extractorHybridDesc' },
@@ -167,17 +175,19 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                 <Download size={20} />
                 <span className="font-medium">{t('projectSettings.exportConfig')}</span>
               </button>
-              <button
-                onClick={() => setActiveTab('global')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-                  activeTab === 'global'
-                    ? 'bg-banana-500 text-white shadow-md'
-                    : 'bg-white dark:bg-background-secondary text-gray-700 dark:text-foreground-secondary hover:bg-gray-100 dark:hover:bg-background-hover'
-                }`}
-              >
-                <SettingsIcon size={20} />
-                <span className="font-medium">{t('projectSettings.globalConfig')}</span>
-              </button>
+              {hasGlobalSettingsAccess && (
+                <button
+                  onClick={() => setActiveTab('global')}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    activeTab === 'global'
+                      ? 'bg-banana-500 text-white shadow-md'
+                      : 'bg-white dark:bg-background-secondary text-gray-700 dark:text-foreground-secondary hover:bg-gray-100 dark:hover:bg-background-hover'
+                  }`}
+                >
+                  <SettingsIcon size={20} />
+                  <span className="font-medium">{t('projectSettings.globalConfig')}</span>
+                </button>
+              )}
             </nav>
           </aside>
 
@@ -380,7 +390,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                   </div>
                 )}
               </div>
-            ) : (
+            ) : hasGlobalSettingsAccess ? (
               <div className="max-w-4xl">
                 <div className="mb-6">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-foreground-primary mb-2">{t('projectSettings.globalConfigTitle')}</h3>
@@ -390,7 +400,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                 </div>
                 <Settings />
               </div>
-            )}
+            ) : null}
           </div>
         </div>
       </div>

@@ -243,11 +243,15 @@ app = create_app()
 
 if __name__ == '__main__':
     # Run development server
-    if os.getenv("IN_DOCKER", "0") == "1":
+    in_docker = os.getenv("IN_DOCKER", "0") == "1"
+    if in_docker:
         port = 5000  # Docker 容器内部固定使用 5000 端口
     else:
         port = int(os.getenv('BACKEND_PORT', 5000))
     debug = os.getenv('FLASK_ENV', 'development') == 'development'
+    # Some restricted container runtimes cannot create many threads.
+    # Default to single-thread mode in Docker to improve compatibility.
+    threaded = os.getenv('FLASK_THREADED', '0' if in_docker else '1') == '1'
     
     logging.info(
         "\n"
@@ -258,10 +262,11 @@ if __name__ == '__main__':
         f"Output Language: {Config.OUTPUT_LANGUAGE}\n"
         f"Environment: {os.getenv('FLASK_ENV', 'development')}\n"
         f"Debug mode: {debug}\n"
+        f"Threaded mode: {threaded}\n"
         f"API Base URL: http://localhost:{port}/api\n"
         f"Database: {app.config['SQLALCHEMY_DATABASE_URI']}\n"
         f"Uploads: {app.config['UPLOAD_FOLDER']}"
     )
     
     # Using absolute paths for database, so WSL path issues should not occur
-    app.run(host='0.0.0.0', port=port, debug=debug, use_reloader=False)
+    app.run(host='0.0.0.0', port=port, debug=debug, use_reloader=False, threaded=threaded)

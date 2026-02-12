@@ -17,7 +17,7 @@
     "lint:backend": "uv run flake8 backend/ --count --select=E9,F63,F7,F82 --show-source --statistics",
     "lint:frontend": "cd frontend && npm run lint",
     "dev": "docker compose up",
-    "dev:backend": "cd backend && uv run python app.py",
+    "dev:backend": "cd backend && uv run alembic upgrade head && uv run python app.py",
     "dev:frontend": "cd frontend && npm run dev",
     "build": "docker compose build",
     "start": "docker compose up -d",
@@ -28,4 +28,3 @@
     "node": ">=18.0.0"
   }
 }
-

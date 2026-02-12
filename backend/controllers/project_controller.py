@@ -21,7 +21,7 @@ from services.task_manager import (
 )
 from utils import (
     success_response, error_response, not_found, bad_request,
-    parse_page_ids_from_body, get_filtered_pages
+    parse_page_ids_from_body, get_filtered_pages, get_client_id_or_error
 )
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,18 @@ logger = logging.getLogger(__name__)
 project_bp = Blueprint('projects', __name__, url_prefix='/api/projects')
 
 
-def _get_project_reference_files_content(project_id: str) -> list:
+def _get_owned_project(project_id: str, client_id: str, include_pages: bool = False):
+    """Fetch project by id within client scope."""
+    query = Project.query
+    if include_pages:
+        query = query.options(joinedload(Project.pages))
+    return query.filter(
+        Project.id == project_id,
+        Project.owner_client_id == client_id
+    ).first()
+
+
+def _get_project_reference_files_content(project_id: str, client_id: str) -> list:
     """
     Get reference files content for a project
     
@@ -41,6 +52,7 @@ def _get_project_reference_files_content(project_id: str) -> list:
     """
     reference_files = ReferenceFile.query.filter_by(
         project_id=project_id,
+        owner_client_id=client_id,
         parse_status='completed'
     ).all()
     
@@ -124,6 +136,10 @@ def list_projects():
     - offset: offset for pagination (default: 0)
     """
     try:
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
         # Parameter validation
         limit = request.args.get('limit', 50, type=int)
         offset = request.args.get('offset', 0, type=int)
@@ -136,6 +152,7 @@ def list_projects():
         # This avoids a second database query
         projects_with_extra = Project.query\
             .options(joinedload(Project.pages))\
+            .filter(Project.owner_client_id == client_id)\
             .order_by(desc(Project.updated_at))\
             .limit(limit + 1)\
             .offset(offset)\
@@ -173,6 +190,10 @@ def create_project():
     }
     """
     try:
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
         data = request.get_json()
         
         if not data:
@@ -189,6 +210,7 @@ def create_project():
         
         # Create project
         project = Project(
+            owner_client_id=client_id,
             creation_type=creation_type,
             idea_prompt=data.get('idea_prompt'),
             outline_text=data.get('outline_text'),
@@ -225,11 +247,11 @@ def get_project(project_id):
     GET /api/projects/{project_id} - Get project details
     """
     try:
-        # Use eager loading to load project and related pages
-        project = Project.query\
-            .options(joinedload(Project.pages))\
-            .filter(Project.id == project_id)\
-            .first()
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
+        project = _get_owned_project(project_id, client_id, include_pages=True)
         
         if not project:
             return not_found('Project')
@@ -253,11 +275,11 @@ def update_project(project_id):
     }
     """
     try:
-        # Use eager loading to load project and pages (for page order updates)
-        project = Project.query\
-            .options(joinedload(Project.pages))\
-            .filter(Project.id == project_id)\
-            .first()
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
+        project = _get_owned_project(project_id, client_id, include_pages=True)
         
         if not project:
             return not_found('Project')
@@ -324,7 +346,11 @@ def delete_project(project_id):
     DELETE /api/projects/{project_id} - Delete project
     """
     try:
-        project = Project.query.get(project_id)
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
+        project = _get_owned_project(project_id, client_id)
         
         if not project:
             return not_found('Project')
@@ -362,7 +388,11 @@ def generate_outline(project_id):
     }
     """
     try:
-        project = Project.query.get(project_id)
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
+        project = _get_owned_project(project_id, client_id)
         
         if not project:
             return not_found('Project')
@@ -375,7 +405,7 @@ def generate_outline(project_id):
         language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
         
         # Get reference files content and create project context
-        reference_files_content = _get_project_reference_files_content(project_id)
+        reference_files_content = _get_project_reference_files_content(project_id, client_id)
         if reference_files_content:
             logger.info(f"Found {len(reference_files_content)} reference files for project {project_id}")
             for rf in reference_files_content:
@@ -476,7 +506,11 @@ def generate_from_description(project_id):
     """
     
     try:
-        project = Project.query.get(project_id)
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
+        project = _get_owned_project(project_id, client_id)
         
         if not project:
             return not_found('Project')
@@ -498,7 +532,7 @@ def generate_from_description(project_id):
         ai_service = get_ai_service()
         
         # Get reference files content and create project context
-        reference_files_content = _get_project_reference_files_content(project_id)
+        reference_files_content = _get_project_reference_files_content(project_id, client_id)
         project_context = ProjectContext(project, reference_files_content)
         
         logger.info(f"开始从描述生成大纲和页面描述: 项目 {project_id}")
@@ -586,7 +620,11 @@ def generate_descriptions(project_id):
     }
     """
     try:
-        project = Project.query.get(project_id)
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
+        project = _get_owned_project(project_id, client_id)
         
         if not project:
             return not_found('Project')
@@ -630,7 +668,7 @@ def generate_descriptions(project_id):
         ai_service = get_ai_service()
         
         # Get reference files content and create project context
-        reference_files_content = _get_project_reference_files_content(project_id)
+        reference_files_content = _get_project_reference_files_content(project_id, client_id)
         project_context = ProjectContext(project, reference_files_content)
         
         # Get app instance for background task
@@ -679,7 +717,11 @@ def generate_images(project_id):
     }
     """
     try:
-        project = Project.query.get(project_id)
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
+        project = _get_owned_project(project_id, client_id)
         
         if not project:
             return not_found('Project')
@@ -785,6 +827,14 @@ def get_task_status(project_id, task_id):
     GET /api/projects/{project_id}/tasks/{task_id} - Get task status
     """
     try:
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
+        project = _get_owned_project(project_id, client_id)
+        if not project:
+            return not_found('Project')
+
         task = Task.query.get(task_id)
         
         if not task or task.project_id != project_id:
@@ -809,7 +859,11 @@ def refine_outline(project_id):
     }
     """
     try:
-        project = Project.query.get(project_id)
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
+        project = _get_owned_project(project_id, client_id)
         
         if not project:
             return not_found('Project')
@@ -839,7 +893,7 @@ def refine_outline(project_id):
         ai_service = get_ai_service()
         
         # Get reference files content and create project context
-        reference_files_content = _get_project_reference_files_content(project_id)
+        reference_files_content = _get_project_reference_files_content(project_id, client_id)
         if reference_files_content:
             logger.info(f"Found {len(reference_files_content)} reference files for refine_outline")
             for rf in reference_files_content:
@@ -963,7 +1017,11 @@ def refine_descriptions(project_id):
     }
     """
     try:
-        project = Project.query.get(project_id)
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
+        project = _get_owned_project(project_id, client_id)
         
         if not project:
             return not_found('Project')
@@ -1008,7 +1066,7 @@ def refine_descriptions(project_id):
         ai_service = get_ai_service()
         
         # Get reference files content and create project context
-        reference_files_content = _get_project_reference_files_content(project_id)
+        reference_files_content = _get_project_reference_files_content(project_id, client_id)
         if reference_files_content:
             logger.info(f"Found {len(reference_files_content)} reference files for refine_descriptions")
             for rf in reference_files_content:

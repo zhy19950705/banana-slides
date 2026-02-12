@@ -111,7 +111,7 @@ export const ReferenceFileSelector: React.FC<ReferenceFileSelectorProps> = React
         // 合并新旧文件列表，避免丢失正在解析的文件
         setFiles(prev => {
           const fileMap = new Map<string, ReferenceFile>();
-          const serverFiles = response.data!.files; // 已经检查过 response.data?.files
+          const serverFiles = response.data!.files;
           
           // 先添加服务器返回的文件（这些是权威数据）
           serverFiles.forEach((f: ReferenceFile) => {
@@ -644,4 +644,3 @@ export const ReferenceFileSelector: React.FC<ReferenceFileSelectorProps> = React
     </Modal>
   );
 });
-

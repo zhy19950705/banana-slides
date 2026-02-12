@@ -38,9 +38,16 @@ mkdir -p uploads
 echo ""
 echo "✅ Setup complete!"
 echo ""
+echo "🗄️  Running database migrations..."
+uv run alembic upgrade head
+if [ $? -ne 0 ]; then
+    echo "❌ Database migration failed."
+    exit 1
+fi
+echo "✅ Database migrations completed."
+echo ""
 echo "🚀 Starting server..."
 echo ""
 
 # Run the application
-python app.py
-
+uv run python app.py

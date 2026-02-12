@@ -37,9 +37,16 @@ if not exist uploads mkdir uploads
 echo.
 echo ✅ Setup complete!
 echo.
+echo 🗄️  Running database migrations...
+uv run alembic upgrade head
+if errorlevel 1 (
+    echo ❌ Database migration failed.
+    exit /b 1
+)
+echo ✅ Database migrations completed.
+echo.
 echo 🚀 Starting server...
 echo.
 
 REM Run the application
-python app.py
-
+uv run python app.py

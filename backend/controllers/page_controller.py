@@ -4,7 +4,7 @@ Page Controller - handles page-related endpoints
 import logging
 from flask import Blueprint, request, current_app
 from models import db, Project, Page, PageImageVersion, Task
-from utils import success_response, error_response, not_found, bad_request
+from utils import success_response, error_response, not_found, bad_request, get_client_id_or_error
 from services import FileService, ProjectContext
 from services.ai_service_manager import get_ai_service
 from services.task_manager import task_manager, generate_single_page_image_task, edit_page_image_task
@@ -20,6 +20,13 @@ logger = logging.getLogger(__name__)
 page_bp = Blueprint('pages', __name__, url_prefix='/api/projects')
 
 
+def _get_owned_project(project_id: str, client_id: str):
+    return Project.query.filter(
+        Project.id == project_id,
+        Project.owner_client_id == client_id
+    ).first()
+
+
 @page_bp.route('/<project_id>/pages', methods=['POST'])
 def create_page(project_id):
     """
@@ -33,7 +40,11 @@ def create_page(project_id):
     }
     """
     try:
-        project = Project.query.get(project_id)
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
+        project = _get_owned_project(project_id, client_id)
         
         if not project:
             return not_found('Project')
@@ -82,9 +93,16 @@ def delete_page(project_id, page_id):
     DELETE /api/projects/{project_id}/pages/{page_id} - Delete page
     """
     try:
-        page = Page.query.get(page_id)
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
 
-        if not page or page.project_id != project_id:
+        project = _get_owned_project(project_id, client_id)
+        if not project:
+            return not_found('Project')
+
+        page = Page.query.filter_by(id=page_id, project_id=project_id).first()
+        if not page:
             return not_found('Page')
 
         # Delete page image if exists
@@ -95,9 +113,7 @@ def delete_page(project_id, page_id):
         db.session.delete(page)
 
         # Update project
-        project = Project.query.get(project_id)
-        if project:
-            project.updated_at = datetime.utcnow()
+        project.updated_at = datetime.utcnow()
 
         db.session.commit()
 
@@ -119,9 +135,16 @@ def update_page(project_id, page_id):
     }
     """
     try:
-        page = Page.query.get(page_id)
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
 
-        if not page or page.project_id != project_id:
+        project = _get_owned_project(project_id, client_id)
+        if not project:
+            return not_found('Project')
+
+        page = Page.query.filter_by(id=page_id, project_id=project_id).first()
+        if not page:
             return not_found('Page')
 
         data = request.get_json()
@@ -160,9 +183,16 @@ def update_page_outline(project_id, page_id):
     }
     """
     try:
-        page = Page.query.get(page_id)
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
         
-        if not page or page.project_id != project_id:
+        project = _get_owned_project(project_id, client_id)
+        if not project:
+            return not_found('Project')
+
+        page = Page.query.filter_by(id=page_id, project_id=project_id).first()
+        if not page:
             return not_found('Page')
         
         data = request.get_json()
@@ -174,9 +204,7 @@ def update_page_outline(project_id, page_id):
         page.updated_at = datetime.utcnow()
         
         # Update project
-        project = Project.query.get(project_id)
-        if project:
-            project.updated_at = datetime.utcnow()
+        project.updated_at = datetime.utcnow()
         
         db.session.commit()
         
@@ -202,9 +230,16 @@ def update_page_description(project_id, page_id):
     }
     """
     try:
-        page = Page.query.get(page_id)
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
         
-        if not page or page.project_id != project_id:
+        project = _get_owned_project(project_id, client_id)
+        if not project:
+            return not_found('Project')
+
+        page = Page.query.filter_by(id=page_id, project_id=project_id).first()
+        if not page:
             return not_found('Page')
         
         data = request.get_json()
@@ -216,9 +251,7 @@ def update_page_description(project_id, page_id):
         page.updated_at = datetime.utcnow()
         
         # Update project
-        project = Project.query.get(project_id)
-        if project:
-            project.updated_at = datetime.utcnow()
+        project.updated_at = datetime.utcnow()
         
         db.session.commit()
         
@@ -240,14 +273,17 @@ def generate_page_description(project_id, page_id):
     }
     """
     try:
-        page = Page.query.get(page_id)
-        
-        if not page or page.project_id != project_id:
-            return not_found('Page')
-        
-        project = Project.query.get(project_id)
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
+        project = _get_owned_project(project_id, client_id)
         if not project:
             return not_found('Project')
+
+        page = Page.query.filter_by(id=page_id, project_id=project_id).first()
+        if not page:
+            return not_found('Page')
         
         data = request.get_json() or {}
         force_regenerate = data.get('force_regenerate', False)
@@ -278,7 +314,7 @@ def generate_page_description(project_id, page_id):
         
         # Get reference files content and create project context
         from controllers.project_controller import _get_project_reference_files_content
-        reference_files_content = _get_project_reference_files_content(project_id)
+        reference_files_content = _get_project_reference_files_content(project_id, client_id)
         project_context = ProjectContext(project, reference_files_content)
         
         # Generate description
@@ -325,14 +361,17 @@ def generate_page_image(project_id, page_id):
     }
     """
     try:
-        page = Page.query.get(page_id)
-        
-        if not page or page.project_id != project_id:
-            return not_found('Page')
-        
-        project = Project.query.get(project_id)
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
+        project = _get_owned_project(project_id, client_id)
         if not project:
             return not_found('Project')
+
+        page = Page.query.filter_by(id=page_id, project_id=project_id).first()
+        if not page:
+            return not_found('Page')
         
         data = request.get_json() or {}
         use_template = data.get('use_template', True)
@@ -512,17 +551,20 @@ def edit_page_image(project_id, page_id):
     - context_images: file uploads (multiple files with key "context_images")
     """
     try:
-        page = Page.query.get(page_id)
-        
-        if not page or page.project_id != project_id:
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
+        project = _get_owned_project(project_id, client_id)
+        if not project:
+            return not_found('Project')
+
+        page = Page.query.filter_by(id=page_id, project_id=project_id).first()
+        if not page:
             return not_found('Page')
         
         if not page.generated_image_path:
             return bad_request("Page must have generated image first")
-        
-        project = Project.query.get(project_id)
-        if not project:
-            return not_found('Project')
         
         # Initialize services
         ai_service = get_ai_service()
@@ -670,9 +712,16 @@ def get_page_image_versions(project_id, page_id):
     GET /api/projects/{project_id}/pages/{page_id}/image-versions - Get all image versions for a page
     """
     try:
-        page = Page.query.get(page_id)
-        
-        if not page or page.project_id != project_id:
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
+        project = _get_owned_project(project_id, client_id)
+        if not project:
+            return not_found('Project')
+
+        page = Page.query.filter_by(id=page_id, project_id=project_id).first()
+        if not page:
             return not_found('Page')
         
         versions = PageImageVersion.query.filter_by(page_id=page_id)\
@@ -693,9 +742,16 @@ def set_current_image_version(project_id, page_id, version_id):
     Set a specific version as the current one
     """
     try:
-        page = Page.query.get(page_id)
-        
-        if not page or page.project_id != project_id:
+        client_id, error = get_client_id_or_error()
+        if error:
+            return error
+
+        project = _get_owned_project(project_id, client_id)
+        if not project:
+            return not_found('Project')
+
+        page = Page.query.filter_by(id=page_id, project_id=project_id).first()
+        if not page:
             return not_found('Page')
         
         version = PageImageVersion.query.get(version_id)

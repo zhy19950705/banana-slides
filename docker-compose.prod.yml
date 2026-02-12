@@ -8,7 +8,7 @@ services:
     ports:
       # 宿主机端口:容器内部端口
       # 宿主机端口由 BACKEND_PORT 控制，容器内部固定 5000
-      - "${BACKEND_PORT:-5000}:5000"
+      - "${BACKEND_PORT:-5100}:5000"
     # 从 .env 文件自动加载所有环境变量
     env_file:
       - .env
@@ -24,7 +24,7 @@ services:
       # - ./gcp-service-account.json:/app/gcp-service-account.json:ro
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -37,7 +37,7 @@ services:
     image: ${DOCKER_IMAGE_FRONTEND:-anoinex/banana-slides-frontend:latest}
     container_name: banana-slides-frontend
     ports:
-      - "3000:80"
+      - "3300:80"
     depends_on:
       - backend
     restart: unless-stopped
