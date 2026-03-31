@@ -16,7 +16,8 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, envDir, '')
   
   // 读取后端端口，默认 5000
-  const backendPort = env.BACKEND_PORT || '5000'
+  const backendPort = process.env.BACKEND_PORT || env.BACKEND_PORT || '5100'
+  const frontendPort = Number(process.env.FRONTEND_PORT || env.FRONTEND_PORT || '3100')
   const backendUrl = `http://localhost:${backendPort}`
   
   return {
@@ -28,7 +29,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      port: 3000,
+      port: frontendPort,
       host: true, // 监听所有地址
       allowedHosts: ['guandata.natapp1.cc'],
       watch: {
@@ -75,4 +76,3 @@ export default defineConfig(({ mode }) => {
     },
   }
 })
-

@@ -5,6 +5,22 @@ import os
 import sys
 from datetime import timedelta
 
+
+def _get_bool_env(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def _get_csv_env(name: str, fallback_name: str | None = None) -> tuple[str, ...]:
+    value = os.getenv(name)
+    if value is None and fallback_name:
+        value = os.getenv(fallback_name)
+    if not value:
+        return ()
+    return tuple(item.strip() for item in value.split(',') if item.strip())
+
 # 基础配置 - 使用更可靠的路径计算方式
 # 在模块加载时立即计算并固定路径
 _current_file = os.path.realpath(__file__)  # 使用realpath解析所有符号链接
@@ -83,6 +99,19 @@ class Config:
     
     # 日志配置
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
+
+    # 自动清理配置
+    AUTO_CLEANUP_ENABLED = _get_bool_env('AUTO_CLEANUP_ENABLED', True)
+    AUTO_CLEANUP_OLDER_THAN_DAYS = int(os.getenv('AUTO_CLEANUP_OLDER_THAN_DAYS', '7'))
+    AUTO_CLEANUP_INTERVAL_HOURS = int(os.getenv('AUTO_CLEANUP_INTERVAL_HOURS', '24'))
+    AUTO_CLEANUP_STARTUP_DELAY_SECONDS = int(os.getenv('AUTO_CLEANUP_STARTUP_DELAY_SECONDS', '300'))
+    AUTO_CLEANUP_INCLUDE_EXPORTS = _get_bool_env('AUTO_CLEANUP_INCLUDE_EXPORTS', True)
+    AUTO_CLEANUP_INCLUDE_ORPHANS = _get_bool_env('AUTO_CLEANUP_INCLUDE_ORPHANS', True)
+    AUTO_CLEANUP_INCLUDE_INTERMEDIATE = _get_bool_env('AUTO_CLEANUP_INCLUDE_INTERMEDIATE', True)
+    SETTINGS_ALLOWED_CLIENT_IDS = _get_csv_env(
+        'SETTINGS_ALLOWED_CLIENT_IDS',
+        fallback_name='VITE_SETTINGS_ALLOWED_CLIENT_IDS',
+    )
     
     # CORS配置
     CORS_ORIGINS = os.getenv('CORS_ORIGINS', 'http://localhost:3000').split(',')

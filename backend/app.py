@@ -4,6 +4,8 @@ Simplified Flask Application Entry Point
 import os
 import sys
 import logging
+import threading
+import time
 from pathlib import Path
 from dotenv import load_dotenv
 from sqlalchemy import event
@@ -24,7 +26,7 @@ from config import Config
 from controllers.material_controller import material_bp, material_global_bp
 from controllers.reference_file_controller import reference_file_bp
 from controllers.settings_controller import settings_bp
-from controllers import project_bp, page_bp, template_bp, user_template_bp, export_bp, file_bp
+from controllers import project_bp, page_bp, template_bp, user_template_bp, export_bp, file_bp, admin_bp
 
 
 # Enable SQLite WAL mode for all connections
@@ -109,6 +111,7 @@ def create_app():
     app.register_blueprint(material_global_bp)
     app.register_blueprint(reference_file_bp, url_prefix='/api/reference-files')
     app.register_blueprint(settings_bp)
+    app.register_blueprint(admin_bp)
 
     with app.app_context():
         # Load settings from database and sync to app.config
@@ -237,6 +240,79 @@ def _load_settings_to_config(app):
         logging.warning(f"Could not load settings from database: {e}")
 
 
+def _run_auto_cleanup_once(app):
+    from controllers.admin_controller import execute_cleanup
+
+    with app.app_context():
+        report = execute_cleanup(
+            dry_run=False,
+            older_than_days=app.config.get('AUTO_CLEANUP_OLDER_THAN_DAYS', 7),
+            include_orphans=app.config.get('AUTO_CLEANUP_INCLUDE_ORPHANS', True),
+            include_exports=app.config.get('AUTO_CLEANUP_INCLUDE_EXPORTS', True),
+            include_intermediate=app.config.get('AUTO_CLEANUP_INCLUDE_INTERMEDIATE', True),
+        )
+        logging.info(
+            "Auto cleanup finished: deleted=%s failed=%s total_candidates=%s total_size=%s older_than_days=%s",
+            report['summary']['deleted_count'],
+            report['summary']['failed_count'],
+            report['summary']['total_count'],
+            report['summary']['total_size_human'],
+            report['older_than_days'],
+        )
+
+
+def _start_auto_cleanup_worker(app):
+    if not app.config.get('AUTO_CLEANUP_ENABLED', False):
+        logging.info("Auto cleanup is disabled")
+        return
+
+    if app.extensions.get('auto_cleanup_worker_started'):
+        return
+
+    interval_hours = max(1, int(app.config.get('AUTO_CLEANUP_INTERVAL_HOURS', 24)))
+    startup_delay = max(0, int(app.config.get('AUTO_CLEANUP_STARTUP_DELAY_SECONDS', 300)))
+
+    def _worker():
+        if startup_delay:
+            time.sleep(startup_delay)
+
+        while True:
+            try:
+                _run_auto_cleanup_once(app)
+            except Exception:
+                logging.exception("Auto cleanup worker failed")
+
+            time.sleep(interval_hours * 3600)
+
+    thread = threading.Thread(
+        target=_worker,
+        name='auto-cleanup-worker',
+        daemon=True,
+    )
+    thread.start()
+    app.extensions['auto_cleanup_worker_started'] = True
+    logging.info(
+        "Auto cleanup worker started: older_than_days=%s interval_hours=%s include_exports=%s include_orphans=%s include_intermediate=%s startup_delay_seconds=%s",
+        app.config.get('AUTO_CLEANUP_OLDER_THAN_DAYS', 7),
+        interval_hours,
+        app.config.get('AUTO_CLEANUP_INCLUDE_EXPORTS', True),
+        app.config.get('AUTO_CLEANUP_INCLUDE_ORPHANS', True),
+        app.config.get('AUTO_CLEANUP_INCLUDE_INTERMEDIATE', True),
+        startup_delay,
+    )
+
+
+def _should_start_auto_cleanup_worker(use_reloader: bool) -> bool:
+    if not use_reloader:
+        return True
+
+    if os.getenv('WERKZEUG_RUN_MAIN') == 'true':
+        return True
+
+    logging.info("Skipping auto cleanup worker startup in the reloader parent process")
+    return False
+
+
 # Create app instance
 app = create_app()
 
@@ -252,6 +328,7 @@ if __name__ == '__main__':
     # Some restricted container runtimes cannot create many threads.
     # Default to single-thread mode in Docker to improve compatibility.
     threaded = os.getenv('FLASK_THREADED', '0' if in_docker else '1') == '1'
+    use_reloader = os.getenv('FLASK_USE_RELOADER', '0') == '1'
     
     logging.info(
         "\n"
@@ -262,11 +339,15 @@ if __name__ == '__main__':
         f"Output Language: {Config.OUTPUT_LANGUAGE}\n"
         f"Environment: {os.getenv('FLASK_ENV', 'development')}\n"
         f"Debug mode: {debug}\n"
+        f"Use reloader: {use_reloader}\n"
         f"Threaded mode: {threaded}\n"
         f"API Base URL: http://localhost:{port}/api\n"
         f"Database: {app.config['SQLALCHEMY_DATABASE_URI']}\n"
         f"Uploads: {app.config['UPLOAD_FOLDER']}"
     )
+
+    if _should_start_auto_cleanup_worker(use_reloader):
+        _start_auto_cleanup_worker(app)
     
     # Using absolute paths for database, so WSL path issues should not occur
-    app.run(host='0.0.0.0', port=port, debug=debug, use_reloader=False, threaded=threaded)
+    app.run(host='0.0.0.0', port=port, debug=debug, use_reloader=use_reloader, threaded=threaded)

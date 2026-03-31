@@ -831,13 +831,23 @@ def get_task_status(project_id, task_id):
         if error:
             return error
 
+        task = Task.query.get(task_id)
+
+        if not task:
+            return not_found('Task')
+
+        # Global tasks (for example standalone material generation) are tracked
+        # with a synthetic project id because Task.project_id cannot be null.
+        if project_id in ['global', 'none']:
+            if task.project_id != 'global':
+                return not_found('Task')
+            return success_response(task.to_dict())
+
         project = _get_owned_project(project_id, client_id)
         if not project:
             return not_found('Project')
 
-        task = Task.query.get(task_id)
-        
-        if not task or task.project_id != project_id:
+        if task.project_id != project_id:
             return not_found('Task')
         
         return success_response(task.to_dict())

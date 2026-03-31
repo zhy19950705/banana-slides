@@ -12,7 +12,7 @@ from .validators import validate_project_status, validate_page_status, allowed_f
 from .path_utils import convert_mineru_path_to_local, find_mineru_file_with_prefix, find_file_with_prefix
 from .pptx_builder import PPTXBuilder
 from .page_utils import parse_page_ids_from_query, parse_page_ids_from_body, get_filtered_pages
-from .client_identity import get_client_id_or_error, CLIENT_ID_HEADER
+from .client_identity import get_client_id_or_error, require_allowed_client_id_or_error, CLIENT_ID_HEADER
 
 __all__ = [
     'success_response',
@@ -33,5 +33,6 @@ __all__ = [
     'parse_page_ids_from_body',
     'get_filtered_pages',
     'get_client_id_or_error',
+    'require_allowed_client_id_or_error',
     'CLIENT_ID_HEADER'
 ]

@@ -159,7 +159,7 @@ export const MaterialGeneratorModal: React.FC<MaterialGeneratorModalProps> = ({
   }, []);
 
   const pollMaterialTask = async (taskId: string) => {
-    const targetProjectId = projectId || 'global';
+    const targetProjectId = projectId || 'none';
     const maxAttempts = 60;
     let attempts = 0;
 
